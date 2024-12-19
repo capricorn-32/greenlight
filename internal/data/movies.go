@@ -1,6 +1,7 @@
 package data
 
 import (
+	"database/sql"
 	"time"
 
 	"greenlight.abhishek/internal/validator"
@@ -14,6 +15,10 @@ type Movie struct {
 	Runtime   Runtime   `json:"runtime"`    // Movie Runtime (in minutes)
 	Genres    []string  `json:"genres"`     // Slice of genres for the movie.
 	Version   int32     `json:"version"`    // The version number starts at 1 and will be incremented each time the movie information is updated.
+}
+
+type MovieModel struct {
+	DB *sql.DB
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
@@ -35,6 +40,22 @@ func ValidateMovie(v *validator.Validator, movie *Movie) {
 	v.Check(len(movie.Genres) >= 1, "genres", "must contain at least 1 genre")
 	v.Check(len(movie.Genres) <= 5, "genres", "must not contain more than 5 genres")
 	v.Check(validator.Unique(movie.Genres), "genres", "must not contain duplicate values")
+}
+
+func (m MovieModel) Insert(movie *Movie) error {
+	return nil
+}
+
+func (m MovieModel) Get(id int64) (*Movie, error) {
+	return nil, nil
+}
+
+func (m MovieModel) Update(movie *Movie) error {
+	return nil
+}
+
+func (m MovieModel) Delete(id int64) error {
+	return nil
 }
 
 // // Implement a MarshalJSON() method on the Movie struct, so that it satisfies the
