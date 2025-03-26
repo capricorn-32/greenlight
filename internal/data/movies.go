@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -46,10 +47,11 @@ func ValidateMovie(v *validator.Validator, movie *Movie) {
 
 func (m MovieModel) Insert(movie *Movie) error {
 	query := `
-		INSERT INTO movies (title, year, runtime genres)
+		INSERT INTO movies (title, year, runtime, genres)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, version
 	`
+
 	args := []interface{}{
 		movie.Title,
 		movie.Year,
@@ -57,7 +59,10 @@ func (m MovieModel) Insert(movie *Movie) error {
 		pq.Array(movie.Genres),
 	}
 
-	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
 }
 
 func (m MovieModel) Get(id int64) (*Movie, error) {
@@ -74,7 +79,19 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 
 	// Movie struct to hold the data returned by the query.
 	var movie Movie
-	err := m.DB.QueryRow(query, id).Scan(
+
+	// Use the context.WithTimeout() function to create a context.Context which carries a
+	// 3-sec timeout deadlince. Note that we're using the empty context.Background()
+	// as the 'parent' context.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+	// Importantly, use defer to make suret that we cancel the context beforet the Get()
+	// method returns.
+	defer cancel()
+
+	// Use the QueryRowContext() method to execute the query, passing in the context
+	// with the deadline as the first argument.
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
@@ -97,10 +114,80 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 }
 
 func (m MovieModel) Update(movie *Movie) error {
+	// Declare the SQL query for updating the record and returning the new version
+	// number.
+
+	query := `
+		UPDATE movies
+		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
+		WHERE id = $5 AND version = $6
+		RETURNING version
+	`
+
+	// Create an args slice containing the values for the placeholder parameters.
+	args := []interface{}{
+		movie.Title,
+		movie.Year,
+		movie.Runtime,
+		pq.Array(movie.Genres),
+		movie.ID,
+		movie.Version,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Use the QueryRow() method to execute the query, passing in the args slice as a
+	// variadic parameter and scanning the new version value into the movie struct.
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (m MovieModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	// Construct the SQL query to delete the record.
+	query := `
+		DELETE FROM movies
+		WHERE id = $1
+	`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Execute the SQL query using the Exec() method, passing in the id variable as
+	// the value fro the placeholder parameter. The Exec() method returns a sql.Result
+	// object.
+	result, err := m.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	// Call the RowsAffected() method on the sql.Result object to get the number of rows
+	// affected by the query.
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	// If no rows were affected, we know that the movies table didn't contain a record
+	// with the provided ID at the moment we tried to delete it. In that case we
+	// return an ErrRecrdNotFound error.
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
 	return nil
 }
 

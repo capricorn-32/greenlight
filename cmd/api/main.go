@@ -42,7 +42,7 @@ func main() {
 	// Environment the application is running in (development, staging, or production)
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	// Data Source Name (DSN) for connecting to a PostgreSQL database
-	flag.StringVar(&cfg.db.dsn, "dsn", "postgres://greenlight:password@localhost/greenlight", "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "dsn", "postgres://postgres:password@localhost/greenlight", "PostgreSQL DSN")
 	// Maximum number of connections that can be opened concurrently.
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgresSQL max open connections")
 	// Maximum number of idle connections in the pool.
